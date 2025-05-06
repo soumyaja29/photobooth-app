@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhotoBooth App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(to bottom right, #c0e7ff, #ffd6e8);
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+      color: #3d3d5c;
+    }
+    nav {
+      background-color: #ffffffcc;
+      padding: 10px;
+      border-bottom: 2px solid #3d3d5c;
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+    }
+    nav a {
+      text-decoration: none;
+      color: #3d3d5c;
+      font-weight: bold;
+    }
+    nav a:hover {
+      color: #4a90e2;
+    }
+    .controls {
+      margin-bottom: 20px;
+    }
+    canvas {
+      border: 5px solid #3d3d5c;
+      margin-top: 20px;
+      background-color: white;
+    }
+    select, input, button {
+      margin: 5px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #3d3d5c;
+      background: #ffffff;
+      color: #3d3d5c;
+    }
+    button {
+      background-color: #6db3f2;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #4a90e2;
+    }
+    video {
+      width: 640px;
+      height: 480px;
+      margin-top: 20px;
+      border: 4px solid #3d3d5c;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="#" onclick="showPage('home')">Home</a>
+    <a href="#" onclick="showPage('about')">About</a>
+  </nav>
+
+  <div id="home" style="display: block;">
+    <h1>📸 PhotoBooth</h1>
+    <div class="controls">
+      <label>Layout:
+        <select id="layout">
+          <option value="2x2">2x2</option>
+          <option value="3x1">3x1</option>
+          <option value="4x2">4x2</option>
+          <option value="6x2">6x2</option>
+        </select>
+      </label>
+
+      <label>Filter:
+        <select id="filter">
+          <option value="none">None</option>
+          <option value="grayscale(100%)">Grayscale</option>
+          <option value="sepia(100%)">Sepia</option>
+          <option value="contrast(200%)">Contrast</option>
+          <option value="brightness(150%)">Brightness</option>
+        </select>
+      </label>
+
+      <label>Frame Color:
+        <input type="color" id="frameColor" value="#000000" />
+      </label>
+
+      <label>Shape:
+        <select id="shape">
+          <option value="square">Square</option>
+          <option value="circle">Circle</option>
+          <option value="rounded">Rounded</option>
+          <option value="diamond">Diamond</option>
+          <option value="star">Star</option>
+          <option value="triangle">Triangle</option>
+        </select>
+      </label>
+
+      <label>Text:
+        <input type="text" id="photoText" placeholder="Add text" />
+      </label>
+
+      <button onclick="preparePhotoStrip()">✅ Confirm Layout & Filter</button>
+      <button onclick="takePhotoStrip()">📷 Take Photo</button>
+      <button onclick="downloadPhotoStrip()">💾 Download</button>
+    </div>
+
+    <video id="video" autoplay></video>
+    <canvas id="canvas" width="800" height="600"></canvas>
+  </div>
+
+  <div id="about" style="display: none;">
+    <h2>About MomoClicks</h2>
+    <p>MomoClicks is a fun and creative PhotoBooth app that lets you take pictures in various layouts, shapes, and filters. Personalize your strip with text, frames, and download your memories!</p>
+  </div>
+
+  <script>
+    function showPage(page) {
+      document.getElementById('home').style.display = page === 'home' ? 'block' : 'none';
+      document.getElementById('about').style.display = page === 'about' ? 'block' : 'none';
+    }
+
+    // Access the camera and display the video stream
+    const videoElement = document.getElementById('video');
+    const canvasElement = document.getElementById('canvas');
+    const context = canvasElement.getContext('2d');
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        videoElement.srcObject = stream;
+      })
+      .catch(error => {
+        console.error('Error accessing the camera: ', error);
+      });
+
+    // Prepare photo strip by applying selected filter and layout
+    function preparePhotoStrip() {
+      const filter = document.getElementById('filter').value;
+      canvasElement.style.filter = filter;  // Apply selected filter to canvas
+
+      // Set canvas background to the selected frame color
+      const frameColor = document.getElementById('frameColor').value;
+      context.fillStyle = frameColor;
+      context.fillRect(0, 0, canvasElement.width, canvasElement.height);
+    }
+
+    // Take photo by capturing the current video frame
+    function takePhotoStrip() {
+      const layout = document.getElementById('layout').value;
+      context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+      
+      // Apply selected layout and shape (mask) to the photo
+      applyLayout(layout);
+      applyShape(context, canvasElement);
+
+      // Draw watermark (MomoClicks and date)
+      drawWatermark(context, canvasElement);
+    }
+
+    // Function to apply the selected layout to the photo
+    function applyLayout(layout) {
+      // Adjust canvas size based on layout
+      switch (layout) {
+        case "2x2":
+          // 2x2 grid (2 rows, 2 columns)
+          context.drawImage(videoElement, 0, 0, canvasElement.width / 2, canvasElement.height / 2);
+          context.drawImage(videoElement, canvasElement.width / 2, 0, canvasElement.width / 2, canvasElement.height / 2);
+          context.drawImage(videoElement, 0, canvasElement.height / 2, canvasElement.width / 2, canvasElement.height / 2);
+          context.drawImage(videoElement, canvasElement.width / 2, canvasElement.height / 2, canvasElement.width / 2, canvasElement.height / 2);
+          break;
+        case "3x1":
+          // 3x1 grid (1 row, 3 columns)
+          context.drawImage(videoElement, 0, 0, canvasElement.width / 3, canvasElement.height);
+          context.drawImage(videoElement, canvasElement.width / 3, 0, canvasElement.width / 3, canvasElement.height);
+          context.drawImage(videoElement, (canvasElement.width / 3) * 2, 0, canvasElement.width / 3, canvasElement.height);
+          break;
+        case "4x2":
+          // 4x2 grid (2 rows, 4 columns)
+          context.drawImage(videoElement, 0, 0, canvasElement.width / 4, canvasElement.height / 2);
+          context.drawImage(videoElement, canvasElement.width / 4, 0, canvasElement.width / 4, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 4) * 2, 0, canvasElement.width / 4, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 4) * 3, 0, canvasElement.width / 4, canvasElement.height / 2);
+          context.drawImage(videoElement, 0, canvasElement.height / 2, canvasElement.width / 4, canvasElement.height / 2);
+          context.drawImage(videoElement, canvasElement.width / 4, canvasElement.height / 2, canvasElement.width / 4, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 4) * 2, canvasElement.height / 2, canvasElement.width / 4, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 4) * 3, canvasElement.height / 2, canvasElement.width / 4, canvasElement.height / 2);
+          break;
+        case "6x2":
+          // 6x2 grid (2 rows, 6 columns)
+          context.drawImage(videoElement, 0, 0, canvasElement.width / 6, canvasElement.height / 2);
+          context.drawImage(videoElement, canvasElement.width / 6, 0, canvasElement.width / 6, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 6) * 2, 0, canvasElement.width / 6, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 6) * 3, 0, canvasElement.width / 6, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 6) * 4, 0, canvasElement.width / 6, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 6) * 5, 0, canvasElement.width / 6, canvasElement.height / 2);
+          context.drawImage(videoElement, 0, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
+          context.drawImage(videoElement, canvasElement.width / 6, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 6) * 2, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 6) * 3, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 6) * 4, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
+          context.drawImage(videoElement, (canvasElement.width / 6) * 5, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
+          break;
+      }
+    }
+
+    // Function to apply selected shape mask
+    function applyShape(context, canvasElement) {
+      const shape = document.getElementById("shape").value;
+      const size = 150;
+      const centerX = canvasElement.width / 2;
+      const centerY = canvasElement.height / 2;
+      context.beginPath();
+
+      switch (shape) {
+        case "circle":
+          context.arc(centerX, centerY, size, 0, Math.PI * 2);
+          break;
+        case "square":
+          context.rect(centerX - size / 2, centerY - size / 2, size, size);
+          break;
+        case "rounded":
+          context.moveTo(centerX + size / 2, centerY);
+          context.lineTo(centerX + size, centerY + size / 2);
+          context.lineTo(centerX + size / 2, centerY + size);
+          context.lineTo(centerX - size / 2, centerY + size / 2);
+          context.lineTo(centerX - size / 2, centerY - size / 2);
+          break;
+        case "diamond":
+          context.moveTo(centerX, centerY - size);
+          context.lineTo(centerX + size, centerY);
+          context.lineTo(centerX, centerY + size);
+          context.lineTo(centerX - size, centerY);
+          context.closePath();
+          break;
+        case "star":
+          // Simple star shape (adjust as needed)
+          context.moveTo(centerX, centerY - size);
+          for (let i = 0; i < 5; i++) {
+            context.lineTo(centerX + Math.cos((i * 2 * Math.PI) / 5) * size, centerY - Math.sin((i * 2 * Math.PI) / 5) * size);
+          }
+          break;
+        case "triangle":
+          context.moveTo(centerX - size / 2, centerY + size / 2);
+          context.lineTo(centerX + size / 2, centerY + size / 2);
+          context.lineTo(centerX, centerY - size);
+          context.closePath();
+          break;
+      }
+
+      context.clip(); // Apply mask
+    }
+
+    // Function to add text to the photo strip
+    function drawWatermark(context, canvasElement) {
+      const text = document.getElementById("photoText").value;
+      const textX = 20;
+      const textY = canvasElement.height - 30;
+      context.font = "30px Arial";
+      context.fillStyle = "#ffffff";
+      context.fillText(text, textX, textY);
+    }
+
+    // Function to download the photo strip
+    function downloadPhotoStrip() {
+      const dataUrl = canvasElement.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = "photo_strip.png";
+      link.click();
+    }
+  </script>
+</body>
+</html>
+

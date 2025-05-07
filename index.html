@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>PhotoBooth App</title>
   <style>
     body {
@@ -54,11 +54,16 @@
       background-color: #4a90e2;
     }
     video {
-      width: 640px;
-      height: 480px;
+      width: 400px;
+      height: 300px;
       margin-top: 20px;
       border: 4px solid #3d3d5c;
       border-radius: 10px;
+    }
+    #countdown {
+      font-size: 48px;
+      color: red;
+      display: none;
     }
   </style>
 </head>
@@ -73,10 +78,10 @@
     <div class="controls">
       <label>Layout:
         <select id="layout">
-          <option value="2x2">2x2</option>
-          <option value="3x1">3x1</option>
-          <option value="4x2">4x2</option>
-          <option value="6x2">6x2</option>
+          <option value="6x2-3pose">Size 6 x 2 Strip (3 Pose)</option>
+          <option value="6x2-4pose">Size 6 x 2 Strip (4 Pose)</option>
+          <option value="6x2-2pose">Size 6 x 2 Strip (2 Pose)</option>
+          <option value="6x4-6pose">Size 6 x 4 Strip (6 Pose)</option>
         </select>
       </label>
 
@@ -109,13 +114,18 @@
         <input type="text" id="photoText" placeholder="Add text" />
       </label>
 
+      <label>Brand:
+        <input type="text" id="brandText" placeholder="e.g. Momoclick" value="Momoclick" />
+      </label>
+
       <button onclick="preparePhotoStrip()">✅ Confirm Layout & Filter</button>
       <button onclick="takePhotoStrip()">📷 Take Photo</button>
       <button onclick="downloadPhotoStrip()">💾 Download</button>
     </div>
 
-    <video id="video" autoplay></video>
-    <canvas id="canvas" width="800" height="600"></canvas>
+    <div id="countdown">5</div>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
   </div>
 
   <div id="about" style="display: none;">
@@ -124,160 +134,174 @@
   </div>
 
   <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const countdownEl = document.getElementById('countdown');
+
+    let capturedImages = [];
+    const layoutSpecs = {
+      '6x2-2pose': { count: 2, cols: 1, width: 400, height: 900 },
+      '6x2-3pose': { count: 3, cols: 1, width: 400, height: 900 },
+      '6x2-4pose': { count: 4, cols: 1, width: 400, height: 900 },
+      '6x4-6pose': { count: 6, cols: 3, width: 600, height: 800 }
+    };
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        console.error("Camera access error:", err);
+        alert("Unable to access the camera. Please allow camera permission.");
+      });
+
     function showPage(page) {
       document.getElementById('home').style.display = page === 'home' ? 'block' : 'none';
       document.getElementById('about').style.display = page === 'about' ? 'block' : 'none';
     }
 
-    // Access the camera and display the video stream
-    const videoElement = document.getElementById('video');
-    const canvasElement = document.getElementById('canvas');
-    const context = canvasElement.getContext('2d');
+    function preparePhotoStrip() {
+      capturedImages = [];
+      const filter = document.getElementById('filter').value;
+      video.style.filter = filter;
+      alert("Layout and filter confirmed. Start taking photos.");
+    }
 
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        videoElement.srcObject = stream;
-      })
-      .catch(error => {
-        console.error('Error accessing the camera: ', error);
+    function takePhotoStrip() {
+      capturedImages = [];
+      const layout = document.getElementById('layout').value;
+      const totalPhotos = layoutSpecs[layout].count;
+      let current = 0;
+
+      function showCountdown(seconds, callback) {
+        countdownEl.style.display = 'block';
+        countdownEl.textContent = seconds;
+        const interval = setInterval(() => {
+          seconds--;
+          countdownEl.textContent = seconds;
+          if (seconds <= 0) {
+            clearInterval(interval);
+            countdownEl.style.display = 'none';
+            callback();
+          }
+        }, 1000);
+      }
+
+      function captureNext() {
+        if (current >= totalPhotos) {
+          renderPhotoStrip();
+          return;
+        }
+        showCountdown(5, () => {
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = 640;
+          tempCanvas.height = 480;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(video, 0, 0, 640, 480);
+          capturedImages.push(tempCanvas);
+          current++;
+          captureNext();
+        });
+      }
+
+      captureNext();
+    }
+
+    function renderPhotoStrip() {
+      const layout = document.getElementById('layout').value;
+      const { width, height, cols } = layoutSpecs[layout];
+      canvas.width = width;
+      canvas.height = height;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const frameColor = document.getElementById('frameColor').value;
+      const photoShape = document.getElementById('shape').value;
+      const photoText = document.getElementById('photoText').value;
+      const brandText = document.getElementById('brandText').value;
+      const filter = document.getElementById('filter').value;
+
+      const shapeMap = {
+        square: (x, y, size) => ctx.rect(x, y, size, size),
+        circle: (x, y, size) => ctx.arc(x + size / 2, y + size / 2, size / 2, 0, 2 * Math.PI),
+        rounded: (x, y, size) => ctx.roundRect ? ctx.roundRect(x, y, size, size, 20) : ctx.rect(x, y, size, size),
+        diamond: (x, y, size) => {
+          ctx.moveTo(x + size / 2, y);
+          ctx.lineTo(x + size, y + size / 2);
+          ctx.lineTo(x + size / 2, y + size);
+          ctx.lineTo(x, y + size / 2);
+          ctx.closePath();
+        },
+        star: (x, y, size) => {
+          const cx = x + size / 2;
+          const cy = y + size / 2;
+          const spikes = 5;
+          const outerRadius = size / 2;
+          const innerRadius = outerRadius / 2.5;
+          let rot = Math.PI / 2 * 3;
+          let step = Math.PI / spikes;
+
+          ctx.moveTo(cx, cy - outerRadius);
+          for (let i = 0; i < spikes; i++) {
+            ctx.lineTo(cx + Math.cos(rot) * outerRadius, cy + Math.sin(rot) * outerRadius);
+            rot += step;
+
+            ctx.lineTo(cx + Math.cos(rot) * innerRadius, cy + Math.sin(rot) * innerRadius);
+            rot += step;
+          }
+          ctx.lineTo(cx, cy - outerRadius);
+          ctx.closePath();
+        },
+        triangle: (x, y, size) => {
+          ctx.moveTo(x + size / 2, y);
+          ctx.lineTo(x + size, y + size);
+          ctx.lineTo(x, y + size);
+          ctx.closePath();
+        }
+      };
+
+      capturedImages.forEach((img, index) => {
+        const x = (index % cols) * (width / cols);
+        const y = Math.floor(index / cols) * (height / Math.ceil(capturedImages.length / cols));
+        const size = width / cols - 10;
+
+        ctx.save();
+        ctx.beginPath();
+        shapeMap[photoShape](x + 5, y + 5, size - 10);
+        ctx.clip();
+
+        ctx.fillStyle = frameColor;
+        ctx.fillRect(x + 5, y + 5, size - 10, size - 10);
+
+        ctx.filter = filter;
+        ctx.drawImage(img, x + 5, y + 5, size - 10, size - 10);
+        ctx.restore();
+
+        ctx.filter = 'none';
+
+        if (photoText) {
+          ctx.font = '16px Arial';
+          ctx.fillStyle = '#000';
+          ctx.fillText(photoText, x + 10, y + size);
+        }
       });
 
-    // Prepare photo strip by applying selected filter and layout
-    function preparePhotoStrip() {
-      const filter = document.getElementById('filter').value;
-      canvasElement.style.filter = filter;  // Apply selected filter to canvas
-
-      // Set canvas background to the selected frame color
-      const frameColor = document.getElementById('frameColor').value;
-      context.fillStyle = frameColor;
-      context.fillRect(0, 0, canvasElement.width, canvasElement.height);
-    }
-
-    // Take photo by capturing the current video frame
-    function takePhotoStrip() {
-      const layout = document.getElementById('layout').value;
-      context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-      
-      // Apply selected layout and shape (mask) to the photo
-      applyLayout(layout);
-      applyShape(context, canvasElement);
-
-      // Draw watermark (MomoClicks and date)
-      drawWatermark(context, canvasElement);
-    }
-
-    // Function to apply the selected layout to the photo
-    function applyLayout(layout) {
-      // Adjust canvas size based on layout
-      switch (layout) {
-        case "2x2":
-          // 2x2 grid (2 rows, 2 columns)
-          context.drawImage(videoElement, 0, 0, canvasElement.width / 2, canvasElement.height / 2);
-          context.drawImage(videoElement, canvasElement.width / 2, 0, canvasElement.width / 2, canvasElement.height / 2);
-          context.drawImage(videoElement, 0, canvasElement.height / 2, canvasElement.width / 2, canvasElement.height / 2);
-          context.drawImage(videoElement, canvasElement.width / 2, canvasElement.height / 2, canvasElement.width / 2, canvasElement.height / 2);
-          break;
-        case "3x1":
-          // 3x1 grid (1 row, 3 columns)
-          context.drawImage(videoElement, 0, 0, canvasElement.width / 3, canvasElement.height);
-          context.drawImage(videoElement, canvasElement.width / 3, 0, canvasElement.width / 3, canvasElement.height);
-          context.drawImage(videoElement, (canvasElement.width / 3) * 2, 0, canvasElement.width / 3, canvasElement.height);
-          break;
-        case "4x2":
-          // 4x2 grid (2 rows, 4 columns)
-          context.drawImage(videoElement, 0, 0, canvasElement.width / 4, canvasElement.height / 2);
-          context.drawImage(videoElement, canvasElement.width / 4, 0, canvasElement.width / 4, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 4) * 2, 0, canvasElement.width / 4, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 4) * 3, 0, canvasElement.width / 4, canvasElement.height / 2);
-          context.drawImage(videoElement, 0, canvasElement.height / 2, canvasElement.width / 4, canvasElement.height / 2);
-          context.drawImage(videoElement, canvasElement.width / 4, canvasElement.height / 2, canvasElement.width / 4, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 4) * 2, canvasElement.height / 2, canvasElement.width / 4, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 4) * 3, canvasElement.height / 2, canvasElement.width / 4, canvasElement.height / 2);
-          break;
-        case "6x2":
-          // 6x2 grid (2 rows, 6 columns)
-          context.drawImage(videoElement, 0, 0, canvasElement.width / 6, canvasElement.height / 2);
-          context.drawImage(videoElement, canvasElement.width / 6, 0, canvasElement.width / 6, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 6) * 2, 0, canvasElement.width / 6, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 6) * 3, 0, canvasElement.width / 6, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 6) * 4, 0, canvasElement.width / 6, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 6) * 5, 0, canvasElement.width / 6, canvasElement.height / 2);
-          context.drawImage(videoElement, 0, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
-          context.drawImage(videoElement, canvasElement.width / 6, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 6) * 2, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 6) * 3, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 6) * 4, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
-          context.drawImage(videoElement, (canvasElement.width / 6) * 5, canvasElement.height / 2, canvasElement.width / 6, canvasElement.height / 2);
-          break;
+      if (brandText) {
+        ctx.font = '24px Arial';
+        ctx.fillStyle = '#3d3d5c';
+        ctx.fillText(brandText, 10, height - 10);
       }
     }
 
-    // Function to apply selected shape mask
-    function applyShape(context, canvasElement) {
-      const shape = document.getElementById("shape").value;
-      const size = 150;
-      const centerX = canvasElement.width / 2;
-      const centerY = canvasElement.height / 2;
-      context.beginPath();
-
-      switch (shape) {
-        case "circle":
-          context.arc(centerX, centerY, size, 0, Math.PI * 2);
-          break;
-        case "square":
-          context.rect(centerX - size / 2, centerY - size / 2, size, size);
-          break;
-        case "rounded":
-          context.moveTo(centerX + size / 2, centerY);
-          context.lineTo(centerX + size, centerY + size / 2);
-          context.lineTo(centerX + size / 2, centerY + size);
-          context.lineTo(centerX - size / 2, centerY + size / 2);
-          context.lineTo(centerX - size / 2, centerY - size / 2);
-          break;
-        case "diamond":
-          context.moveTo(centerX, centerY - size);
-          context.lineTo(centerX + size, centerY);
-          context.lineTo(centerX, centerY + size);
-          context.lineTo(centerX - size, centerY);
-          context.closePath();
-          break;
-        case "star":
-          // Simple star shape (adjust as needed)
-          context.moveTo(centerX, centerY - size);
-          for (let i = 0; i < 5; i++) {
-            context.lineTo(centerX + Math.cos((i * 2 * Math.PI) / 5) * size, centerY - Math.sin((i * 2 * Math.PI) / 5) * size);
-          }
-          break;
-        case "triangle":
-          context.moveTo(centerX - size / 2, centerY + size / 2);
-          context.lineTo(centerX + size / 2, centerY + size / 2);
-          context.lineTo(centerX, centerY - size);
-          context.closePath();
-          break;
-      }
-
-      context.clip(); // Apply mask
-    }
-
-    // Function to add text to the photo strip
-    function drawWatermark(context, canvasElement) {
-      const text = document.getElementById("photoText").value;
-      const textX = 20;
-      const textY = canvasElement.height - 30;
-      context.font = "30px Arial";
-      context.fillStyle = "#ffffff";
-      context.fillText(text, textX, textY);
-    }
-
-    // Function to download the photo strip
     function downloadPhotoStrip() {
-      const dataUrl = canvasElement.toDataURL("image/png");
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = "photo_strip.png";
+      const link = document.createElement('a');
+      link.download = 'photostrip.png';
+      link.href = canvas.toDataURL();
       link.click();
     }
   </script>
 </body>
 </html>
+
+
 
